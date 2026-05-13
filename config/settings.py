@@ -1,6 +1,16 @@
 import os
+import sys
 
-DB_PATH = os.path.abspath(os.path.join(os.getcwd(), "ecom_data.db"))
+def get_base_path():
+    if getattr(sys, 'frozen', False):
+        # Path where the .exe is located
+        return os.path.dirname(sys.executable)
+    else:
+        # Path where the script is located
+        return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+BASE_DIR = get_base_path()
+DB_PATH = os.path.join(BASE_DIR, "ecom_data.db")
 
 SHOP_NAME = "E-Commerce Retailer"
 GSTIN = "29XXXXXXXXXXXXX"

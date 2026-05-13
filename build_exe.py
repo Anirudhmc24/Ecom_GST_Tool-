@@ -19,6 +19,13 @@ args = [
     '--add-data=USER_MANUAL.md;.',
     '--hidden-import=streamlit',
     '--hidden-import=pandas',
+    # Exclude heavy modules to shrink the exe and speed up build
+    '--exclude-module=torch',
+    '--exclude-module=torchvision',
+    '--exclude-module=scipy',
+    '--exclude-module=sympy',
+    '--exclude-module=plotly',
+    '--exclude-module=matplotlib',
     '--clean',
 ]
 

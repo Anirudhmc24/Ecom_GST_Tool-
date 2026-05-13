@@ -1,13 +1,19 @@
 import streamlit as st
 import pandas as pd
+import tempfile
+import os
 from database.db_ecom import get_all_inventory, add_purchase_order
+from services.purchase_parser import PurchaseParser
 from config.settings import GST_RATES
 
 def purchases_page():
     st.title("🛒 Purchase Entry")
     st.write("Record B2B purchases to update stock and track GST inputs.")
     
-    with st.form("purchase_form"):
+    tab1, tab2 = st.tabs(["Manual Entry", "Bulk Excel Upload"])
+    
+    with tab1:
+        with st.form("purchase_form"):
         col1, col2 = st.columns(2)
         with col1:
             invoice_no = st.text_input("Invoice Number")
@@ -54,6 +60,11 @@ def purchases_page():
                 item_taxable = qty * unit_price
                 item_gst = item_taxable * gst_val
                 
+                # Get HSN and UQC from inventory for manual entry
+                inv_item = next((item for item in inventory if item['sku'] == selected_sku), None)
+                hsn_code = inv_item['hsn_code'] if inv_item else 'Unknown'
+                uqc = inv_item['unit'] if inv_item else 'Pcs'
+                
                 items = [{
                     'sku': selected_sku,
                     'quantity': qty,
@@ -63,7 +74,9 @@ def purchases_page():
                     'igst_amount': item_gst if gstin[:2] != "29" else 0,
                     'cgst_amount': item_gst/2 if gstin[:2] == "29" else 0,
                     'sgst_amount': item_gst/2 if gstin[:2] == "29" else 0,
-                    'line_total': item_taxable + item_gst
+                    'line_total': item_taxable + item_gst,
+                    'hsn_code': hsn_code,
+                    'uqc': uqc
                 }]
                 
                 success, msg = add_purchase_order(purchase, items)
@@ -71,3 +84,39 @@ def purchases_page():
                     st.success(msg)
                 else:
                     st.error(f"Error: {msg}")
+
+    with tab2:
+        st.subheader("Upload Purchase Invoices (Excel/CSV)")
+        uploaded_file = st.file_uploader("Choose a file", type=["csv", "xlsx"])
+        if uploaded_file is not None:
+            if st.button("Process Purchase File"):
+                try:
+                    # Save uploaded file temporarily
+                    suffix = ".xlsx" if uploaded_file.name.endswith(".xlsx") else ".csv"
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_file:
+                        tmp_file.write(uploaded_file.getvalue())
+                        tmp_file_path = tmp_file.name
+
+                    # Parse data
+                    parser = PurchaseParser()
+                    parsed_purchases = parser.parse(tmp_file_path)
+                    
+                    if not parsed_purchases:
+                        st.warning("No purchase data could be extracted.")
+                    else:
+                        success_count = 0
+                        error_count = 0
+                        for p_data in parsed_purchases:
+                            success, msg = add_purchase_order(p_data['purchase'], p_data['items'])
+                            if success:
+                                success_count += 1
+                            else:
+                                error_count += 1
+                        
+                        st.success(f"Successfully imported {success_count} purchase invoices.")
+                        if error_count > 0:
+                            st.error(f"Failed to import {error_count} invoices. They might already exist.")
+                            
+                    os.unlink(tmp_file_path)
+                except Exception as e:
+                    st.error(f"Error processing file: {e}")

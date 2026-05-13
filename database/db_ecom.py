@@ -44,6 +44,9 @@ def init_db():
             total_amount    REAL    NOT NULL,
             customer_state  TEXT    NOT NULL,
             return_status   TEXT    DEFAULT 'Delivered', -- Delivered, Returned, Cancelled
+            hsn_code        TEXT,
+            uqc             TEXT,
+            gst_rate        REAL,
             FOREIGN KEY (sku) REFERENCES inventory(sku)
         )
     """)
@@ -78,10 +81,54 @@ def init_db():
             cgst_amount     REAL    DEFAULT 0,
             sgst_amount     REAL    DEFAULT 0,
             line_total      REAL    NOT NULL,
+            hsn_code        TEXT,
+            uqc             TEXT,
             FOREIGN KEY (invoice_no) REFERENCES purchases(invoice_no),
             FOREIGN KEY (sku) REFERENCES inventory(sku)
         )
     """)
+
+    # ── HSN Overrides ───────────────────────────────────────────────────────
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS hsn_overrides (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            month_year  TEXT    NOT NULL,
+            hsn_sc      TEXT    NOT NULL,
+            uqc         TEXT    NOT NULL,
+            qty         REAL    NOT NULL,
+            rt          REAL    NOT NULL,
+            txval       REAL    NOT NULL,
+            iamt        REAL    DEFAULT 0,
+            camt        REAL    DEFAULT 0,
+            samt        REAL    DEFAULT 0
+        )
+    """)
+
+    # ── Migrations ──────────────────────────────────────────────────────────
+    try:
+        c.execute("SELECT hsn_code FROM ecom_sales LIMIT 1")
+    except sqlite3.OperationalError:
+        # Add columns to ecom_sales
+        c.execute("ALTER TABLE ecom_sales ADD COLUMN hsn_code TEXT")
+        c.execute("ALTER TABLE ecom_sales ADD COLUMN uqc TEXT")
+        c.execute("ALTER TABLE ecom_sales ADD COLUMN gst_rate REAL")
+        
+        # Add columns to purchase_items
+        c.execute("ALTER TABLE purchase_items ADD COLUMN hsn_code TEXT")
+        c.execute("ALTER TABLE purchase_items ADD COLUMN uqc TEXT")
+        
+        # Backfill data from inventory
+        c.execute("""
+            UPDATE ecom_sales 
+            SET hsn_code = (SELECT hsn_code FROM inventory WHERE inventory.sku = ecom_sales.sku),
+                uqc = (SELECT unit FROM inventory WHERE inventory.sku = ecom_sales.sku),
+                gst_rate = (SELECT gst_rate FROM inventory WHERE inventory.sku = ecom_sales.sku)
+        """)
+        c.execute("""
+            UPDATE purchase_items 
+            SET hsn_code = (SELECT hsn_code FROM inventory WHERE inventory.sku = purchase_items.sku),
+                uqc = (SELECT unit FROM inventory WHERE inventory.sku = purchase_items.sku)
+        """)
 
     # Seed sample inventory data if empty
     c.execute("SELECT COUNT(*) FROM inventory")
@@ -137,13 +184,14 @@ def add_ecom_sales(sales_list):
                 INSERT INTO ecom_sales (
                     order_id, platform, order_date, sku, quantity, unit_price, 
                     taxable_value, igst_amount, cgst_amount, sgst_amount, 
-                    total_amount, customer_state, return_status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    total_amount, customer_state, return_status, hsn_code, uqc, gst_rate
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 sale['order_id'], sale['platform'], sale['order_date'], sale['sku'], 
                 sale['quantity'], sale['unit_price'], sale['taxable_value'], 
                 sale['igst_amount'], sale['cgst_amount'], sale['sgst_amount'], 
-                sale['total_amount'], sale['customer_state'], sale['return_status']
+                sale['total_amount'], sale['customer_state'], sale['return_status'],
+                sale.get('hsn_code'), sale.get('uqc'), sale.get('gst_rate')
             ))
             # Optional: Auto-deduct stock
             conn.execute("UPDATE inventory SET quantity = quantity - ? WHERE sku = ?", (sale['quantity'], sale['sku']))
@@ -180,12 +228,12 @@ def add_purchase_order(purchase, items):
             conn.execute("""
                 INSERT INTO purchase_items (
                     invoice_no, sku, quantity, unit_price, gst_rate, 
-                    taxable_value, igst_amount, cgst_amount, sgst_amount, line_total
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    taxable_value, igst_amount, cgst_amount, sgst_amount, line_total, hsn_code, uqc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 purchase['invoice_no'], item['sku'], item['quantity'], item['unit_price'], 
                 item['gst_rate'], item['taxable_value'], item['igst_amount'], 
-                item['cgst_amount'], item['sgst_amount'], item['line_total']
+                item['cgst_amount'], item['sgst_amount'], item['line_total'], item.get('hsn_code'), item.get('uqc')
             ))
             # Auto-add stock
             conn.execute("UPDATE inventory SET quantity = quantity + ? WHERE sku = ?", (item['quantity'], item['sku']))

@@ -46,7 +46,10 @@ class AmazonParser(SalesParser):
                     'sgst_amount': self._safe_float(row.get('SGST') or row.get('sgst-amount') or 0),
                     'total_amount': total,
                     'customer_state': row.get('Ship To State') or row.get('ship-state') or 'Unknown',
-                    'return_status': 'Returned' if 'Refund' in str(row.get('Transaction Type', '')) else 'Delivered'
+                    'return_status': 'Returned' if 'Refund' in str(row.get('Transaction Type', '')) else 'Delivered',
+                    'hsn_code': row.get('HSN') or row.get('hsn-code') or row.get('HSN/SAC'),
+                    'uqc': row.get('UQC') or 'Pcs',
+                    'gst_rate': self._safe_float(row.get('Tax Rate') or row.get('tax-rate') or row.get('GST Rate')) / 100 if row.get('Tax Rate') or row.get('tax-rate') or row.get('GST Rate') else None
                 })
         return results
 
@@ -72,7 +75,10 @@ class FlipkartParser(SalesParser):
                     'sgst_amount': self._safe_float(row.get('SGST') or 0),
                     'total_amount': self._safe_float(row.get('Total_Amount') or 0),
                     'customer_state': row.get('Customer_State') or 'Unknown',
-                    'return_status': 'Delivered'
+                    'return_status': 'Delivered',
+                    'hsn_code': row.get('HSN') or row.get('HSN_Code') or row.get('HSN/SAC'),
+                    'uqc': row.get('UQC') or 'Pcs',
+                    'gst_rate': self._safe_float(row.get('GST_Rate') or row.get('Tax_Rate')) / 100 if row.get('GST_Rate') or row.get('Tax_Rate') else None
                 })
         return results
 
@@ -98,7 +104,10 @@ class MeeshoParser(SalesParser):
                     'sgst_amount': self._safe_float(row.get('SGST') or 0),
                     'total_amount': self._safe_float(row.get('Total Order Value') or 0),
                     'customer_state': row.get('State') or 'Unknown',
-                    'return_status': 'Returned' if row.get('Order Status') == 'Returned' else 'Delivered'
+                    'return_status': 'Returned' if row.get('Order Status') == 'Returned' else 'Delivered',
+                    'hsn_code': row.get('HSN') or row.get('HSN Code') or row.get('HSN/SAC'),
+                    'uqc': row.get('UQC') or 'Pcs',
+                    'gst_rate': self._safe_float(row.get('GST Rate') or row.get('Tax Rate')) / 100 if row.get('GST Rate') or row.get('Tax Rate') else None
                 })
         return results
 
