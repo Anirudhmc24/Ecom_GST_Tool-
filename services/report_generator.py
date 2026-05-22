@@ -17,11 +17,11 @@ def get_gstr1_b2cs(month_year=None):
     query = f"""
         SELECT 
             customer_state as "Place of Supply",
-            CAST(( (igst_amount + cgst_amount + sgst_amount) / taxable_value ) * 100 as INTEGER) || '%' as "Tax Rate",
-            SUM(taxable_value) as "Total Taxable Value",
-            SUM(igst_amount) as "Total IGST",
-            SUM(cgst_amount) as "Total CGST",
-            SUM(sgst_amount) as "Total SGST"
+            COALESCE(CAST(ROUND(gst_rate * 100) as INTEGER), CAST(ROUND(( (igst_amount + cgst_amount + sgst_amount) / taxable_value ) * 100) as INTEGER)) || '%' as "Tax Rate",
+            SUM(CASE WHEN return_status = 'Returned' THEN -taxable_value ELSE taxable_value END) as "Total Taxable Value",
+            SUM(CASE WHEN return_status = 'Returned' THEN -igst_amount ELSE igst_amount END) as "Total IGST",
+            SUM(CASE WHEN return_status = 'Returned' THEN -cgst_amount ELSE cgst_amount END) as "Total CGST",
+            SUM(CASE WHEN return_status = 'Returned' THEN -sgst_amount ELSE sgst_amount END) as "Total SGST"
         FROM ecom_sales
         {where_clause}
         GROUP BY customer_state, "Tax Rate"
@@ -48,12 +48,12 @@ def get_hsn_summary(month_year=None):
             hsn_code as "HSN",
             uqc as "UQC",
             gst_rate * 100 as "GST Rate",
-            SUM(quantity) as "Total Quantity",
-            SUM(taxable_value) as "Total Taxable Value",
-            SUM(igst_amount) as "IGST",
-            SUM(cgst_amount) as "CGST",
-            SUM(sgst_amount) as "SGST",
-            SUM(total_amount) as "Total Value"
+            SUM(CASE WHEN return_status = 'Returned' THEN -quantity ELSE quantity END) as "Total Quantity",
+            SUM(CASE WHEN return_status = 'Returned' THEN -taxable_value ELSE taxable_value END) as "Total Taxable Value",
+            SUM(CASE WHEN return_status = 'Returned' THEN -igst_amount ELSE igst_amount END) as "IGST",
+            SUM(CASE WHEN return_status = 'Returned' THEN -cgst_amount ELSE cgst_amount END) as "CGST",
+            SUM(CASE WHEN return_status = 'Returned' THEN -sgst_amount ELSE sgst_amount END) as "SGST",
+            SUM(CASE WHEN return_status = 'Returned' THEN -total_amount ELSE total_amount END) as "Total Value"
         FROM ecom_sales
         {where_clause}
         GROUP BY hsn_code, uqc, gst_rate
@@ -87,7 +87,7 @@ def get_final_hsn_data(month_year):
 def get_sales_by_platform():
     conn = get_conn()
     query = """
-        SELECT platform, SUM(total_amount) as "Total Sales", COUNT(order_id) as "Order Count"
+        SELECT platform, SUM(CASE WHEN return_status = 'Returned' THEN -total_amount ELSE total_amount END) as "Total Sales", COUNT(order_id) as "Order Count"
         FROM ecom_sales
         GROUP BY platform
     """

@@ -16,7 +16,7 @@ args = [
     '--add-data=ui;ui',
     '--add-data=services;services',
     '--add-data=config;config',
-    '--add-data=USER_MANUAL.md;.',
+    '--add-data=USER_MANUAL_ECOM_GST.md;.',
     '--hidden-import=streamlit',
     '--hidden-import=pandas',
     # Exclude heavy modules to shrink the exe and speed up build

@@ -4,6 +4,7 @@ import datetime
 from services.report_generator import get_gstr1_b2cs, get_hsn_summary, get_sales_by_platform, get_final_hsn_data
 from services.gstr1_json import generate_gstr1_json
 from database.db_ecom import get_conn
+from config.settings import GSTIN
 
 def reports_page():
     st.title("📄 GST & Sales Reports")
@@ -91,7 +92,7 @@ def reports_page():
         st.subheader("Generate Final GSTR-1 JSON")
         st.write("This JSON file is ready to be directly uploaded to the GST Portal Offline Utility.")
         
-        gstin = st.text_input("Your GSTIN", value="29XXXXX0000X1Z5")
+        gstin = st.text_input("Your GSTIN", value=GSTIN)
         
         # Check for missing HSNs
         conn = get_conn()
@@ -101,17 +102,15 @@ def reports_page():
         if missing_hsn > 0:
             st.warning(f"⚠️ Warning: Found {missing_hsn} sales records in {selected_month} with missing HSN codes. Your JSON may be rejected by the portal. Please update inventory or apply overrides.")
             
-        if st.button("Generate JSON"):
-            try:
-                # Calculate financial period, e.g., '042026'
-                fp = selected_month.split('-')[1] + selected_month.split('-')[0]
-                json_data = generate_gstr1_json(selected_month, gstin, fp)
-                st.download_button(
-                    label="Download GSTR-1 JSON",
-                    data=json_data,
-                    file_name=f"GSTR1_{gstin}_{selected_month}.json",
-                    mime="application/json"
-                )
-                st.success("JSON Generated Successfully! Click download below.")
-            except Exception as e:
-                st.error(f"Error generating JSON: {e}")
+        try:
+            # Calculate financial period, e.g., '042026'
+            fp = selected_month.split('-')[1] + selected_month.split('-')[0]
+            json_data = generate_gstr1_json(selected_month, gstin, fp)
+            st.download_button(
+                label="Download GSTR-1 JSON",
+                data=json_data,
+                file_name=f"GSTR1_{gstin}_{selected_month}.json",
+                mime="application/json"
+            )
+        except Exception as e:
+            st.error(f"Error generating JSON: {e}")

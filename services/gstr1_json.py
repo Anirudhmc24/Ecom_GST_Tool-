@@ -1,6 +1,53 @@
 import json
 from services.report_generator import get_gstr1_b2cs, get_final_hsn_data
 
+STATE_CODES_MAP = {
+    "jammu and kashmir": "01",
+    "jammu & kashmir": "01",
+    "himachal pradesh": "02",
+    "punjab": "03",
+    "chandigarh": "04",
+    "uttarakhand": "05",
+    "haryana": "06",
+    "delhi": "07",
+    "rajasthan": "08",
+    "uttar pradesh": "09",
+    "bihar": "10",
+    "sikkim": "11",
+    "arunachal pradesh": "12",
+    "nagaland": "13",
+    "manipur": "14",
+    "mizoram": "15",
+    "tripura": "16",
+    "meghalaya": "17",
+    "assam": "18",
+    "west bengal": "19",
+    "jharkhand": "20",
+    "odisha": "21",
+    "orissa": "21",
+    "chhattisgarh": "22",
+    "madhya pradesh": "23",
+    "gujarat": "24",
+    "dadra and nagar haveli": "26",
+    "dadra & nagar haveli": "26",
+    "daman and diu": "26",
+    "daman & diu": "26",
+    "maharashtra": "27",
+    "karnataka": "29",
+    "goa": "30",
+    "lakshadweep": "31",
+    "kerala": "32",
+    "tamil nadu": "33",
+    "puducherry": "34",
+    "pondicherry": "34",
+    "andaman and nicobar islands": "35",
+    "andaman & nicobar islands": "35",
+    "telangana": "36",
+    "andhra pradesh": "37",
+    "ladakh": "38",
+    "leh ladakh": "38"
+}
+
 def generate_gstr1_json(month_year, gstin, fp):
     """
     Generates the exact GSTR-1 JSON payload structure required by the GST portal.
@@ -14,9 +61,18 @@ def generate_gstr1_json(month_year, gstin, fp):
     b2cs_list = []
     if not b2cs_df.empty:
         for _, row in b2cs_df.iterrows():
-            pos = str(row['Place of Supply'])[:2] if row['Place of Supply'] and row['Place of Supply'][0].isdigit() else '29' # Defaulting to KA if unparseable state code, user should fix data ideally
-            if '-' in str(row['Place of Supply']):
-                pos = str(row['Place of Supply']).split('-')[0].strip()
+            state_str = str(row['Place of Supply']).strip()
+            if state_str and len(state_str) >= 2 and state_str[:2].isdigit():
+                pos = state_str[:2]
+            elif '-' in state_str and state_str.split('-')[0].strip().isdigit() and len(state_str.split('-')[0].strip()) == 2:
+                pos = state_str.split('-')[0].strip()
+            else:
+                state_clean = state_str.lower().replace('&', 'and').strip()
+                if '-' in state_clean:
+                    parts = [p.strip() for p in state_clean.split('-')]
+                    pos = STATE_CODES_MAP.get(parts[1], STATE_CODES_MAP.get(parts[0], '29'))
+                else:
+                    pos = STATE_CODES_MAP.get(state_clean, '29')
                 
             rate = float(str(row['Tax Rate']).replace('%', '')) if row['Tax Rate'] else 0.0
             b2cs_list.append({
