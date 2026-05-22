@@ -84,3 +84,20 @@ def importer_page():
             
     except Exception as e:
         st.error(f"An error occurred: {e}")
+
+    # Database Maintenance Section
+    st.markdown("---")
+    st.subheader("🧹 Database Maintenance")
+    st.write("Need to start fresh or remove imported data? Use the option below.")
+    
+    confirm_clear = st.checkbox("I understand that clearing the database will delete all sales, returns, purchases, and reset inventory stock.", key="confirm_clear_db")
+    if confirm_clear:
+        if st.button("Clear and Reset Database", type="secondary"):
+            from database.db_ecom import clear_db
+            try:
+                clear_db()
+                st.success("Database has been successfully cleared and reset!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Failed to clear database: {e}")
+

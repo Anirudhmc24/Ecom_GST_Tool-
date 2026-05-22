@@ -1,9 +1,9 @@
 import sqlite3
 import datetime
-from config.settings import DB_PATH
+import config.settings
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(config.settings.DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -287,6 +287,22 @@ def get_unreconciled_returns():
     conn.close()
     return [dict(r) for r in returns]
 
+def clear_db():
+    """
+    Clears all tables in the database and re-seeds default inventory items.
+    """
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("DROP TABLE IF EXISTS inventory")
+    c.execute("DROP TABLE IF EXISTS ecom_sales")
+    c.execute("DROP TABLE IF EXISTS purchases")
+    c.execute("DROP TABLE IF EXISTS purchase_items")
+    c.execute("DROP TABLE IF EXISTS hsn_overrides")
+    conn.commit()
+    conn.close()
+    init_db()
+
 if __name__ == "__main__":
     init_db()
     print("Database initialized successfully.")
+
