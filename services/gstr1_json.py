@@ -75,61 +75,93 @@ def generate_gstr1_json(month_year, gstin, fp):
                     pos = STATE_CODES_MAP.get(state_clean, '29')
                 
             rate = float(str(row['Tax Rate']).replace('%', '')) if row['Tax Rate'] else 0.0
-            b2cs_list.append({
-                "sply_ty": "INTRA" if pos == gstin[:2] else "INTER",
-                "rt": rate,
-                "typ": "OE",
-                "pos": pos,
-                "txval": round(float(row['Total Taxable Value']), 2),
-                "iamt": round(float(row['Total IGST']), 2),
-                "camt": round(float(row['Total CGST']), 2),
-                "samt": round(float(row['Total SGST']), 2),
-                "csamt": 0.0
-            })
+            txval = round(float(row['Total Taxable Value']), 2)
+            
+            # GSTR-1 B2CS table does not allow negative/zero values. Net negative states/rates must be handled separately.
+            if txval > 0:
+                sply_ty = "INTRA" if pos == gstin[:2] else "INTER"
+                if sply_ty == "INTRA":
+                    iamt = 0.0
+                    camt = round(txval * (rate / 2.0) / 100.0, 2)
+                    samt = camt
+                else:
+                    iamt = round(txval * rate / 100.0, 2)
+                    camt = 0.0
+                    samt = 0.0
+                    
+                b2cs_list.append({
+                    "sply_ty": sply_ty,
+                    "rt": rate,
+                    "typ": "OE",
+                    "pos": pos,
+                    "txval": txval,
+                    "iamt": iamt,
+                    "camt": camt,
+                    "samt": samt,
+                    "csamt": 0.0
+                })
 
     # HSN Data
     hsn_df = get_final_hsn_data(month_year)
     hsn_data_list = []
     if not hsn_df.empty:
-        for idx, row in hsn_df.iterrows():
-            hsn_data_list.append({
-                "num": idx + 1,
-                "hsn_sc": str(row['HSN']),
-                "uqc": str(row['UQC']),
-                "qty": float(row['Total Quantity']),
-                "rt": float(row['GST Rate']),
-                "txval": round(float(row['Total Taxable Value']), 2),
-                "iamt": round(float(row['IGST']), 2),
-                "camt": round(float(row['CGST']), 2),
-                "samt": round(float(row['SGST']), 2),
-                "csamt": 0.0
-            })
+        for _, row in hsn_df.iterrows():
+            txval = round(float(row['Total Taxable Value']), 2)
+            qty = float(row['Total Quantity'])
+            
+            # GSTR-1 HSN summary table does not allow negative/zero values.
+            if txval > 0 and qty > 0:
+                rate = float(row['GST Rate'])
+                # If rate is represented as a fraction (e.g. 0.18 instead of 18.0), convert it
+                if 0.0 < rate < 1.0:
+                    rate = rate * 100.0
+                    
+                iamt_db = round(float(row['IGST']), 2) if 'IGST' in row and row['IGST'] else 0.0
+                camt_db = round(float(row['CGST']), 2) if 'CGST' in row and row['CGST'] else 0.0
+                samt_db = round(float(row['SGST']), 2) if 'SGST' in row and row['SGST'] else 0.0
+                
+                total_db_tax = iamt_db + camt_db + samt_db
+                if total_db_tax > 0:
+                    igst_share = iamt_db / total_db_tax
+                    txval_inter = txval * igst_share
+                    txval_intra = txval * (1.0 - igst_share)
+                    iamt = round(txval_inter * rate / 100.0, 2)
+                    camt = round(txval_intra * (rate / 2.0) / 100.0, 2)
+                    samt = camt
+                else:
+                    # Fallback to all IGST if no tax in DB
+                    iamt = round(txval * rate / 100.0, 2)
+                    camt = 0.0
+                    samt = 0.0
+                
+                hsn_data_list.append({
+                    "num": len(hsn_data_list) + 1, # Dynamically generate sequence number to avoid gaps
+                    "hsn_sc": str(row['HSN']),
+                    "uqc": str(row['UQC']),
+                    "qty": qty,
+                    "rt": rate,
+                    "txval": txval,
+                    "iamt": iamt,
+                    "camt": camt,
+                    "samt": samt,
+                    "csamt": 0.0
+                })
 
-    # Final Payload Structure
+    # Final Payload Structure (strictly omitting empty tables to pass validation)
     payload = {
         "gstin": gstin,
         "fp": fp,
-        "gt": 0, # Gross Turnover - user can edit if needed
-        "cur_gt": 0,
+        "gt": 0.0,
+        "cur_gt": 0.0,
         "version": "GST3.0.0",
-        "hash": "hash",
-        "b2b": [],
-        "b2cl": [],
-        "b2cs": b2cs_list,
-        "cdnr": [],
-        "cdnur": [],
-        "exp": [],
-        "at": [],
-        "atadj": [],
-        "nil": {
-            "inv": []
-        },
-        "hsn": {
-            "data": hsn_data_list
-        },
-        "doc_issue": {
-            "doc_det": []
-        }
+        "hash": "hash"
     }
     
+    if b2cs_list:
+        payload["b2cs"] = b2cs_list
+    if hsn_data_list:
+        payload["hsn"] = {
+            "data": hsn_data_list
+        }
+        
     return json.dumps(payload, indent=2)

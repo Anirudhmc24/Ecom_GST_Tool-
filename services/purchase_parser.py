@@ -6,7 +6,8 @@ class PurchaseParser:
     def _safe_float(self, val):
         try:
             if not val: return 0.0
-            clean_val = re.sub(r'[^\d.]', '', str(val))
+            # Remove currency symbols and commas, keeping the minus sign
+            clean_val = re.sub(r'[^\d.-]', '', str(val))
             return float(clean_val) if clean_val else 0.0
         except:
             return 0.0

@@ -239,7 +239,7 @@ class TestEcomTool(unittest.TestCase):
         self.assertEqual(b2cs_item['pos'], '27')
         self.assertEqual(b2cs_item['rt'], 18.0)
         self.assertEqual(b2cs_item['txval'], 84.75)
-        self.assertEqual(b2cs_item['iamt'], 15.25)
+        self.assertEqual(b2cs_item['iamt'], 15.26)
         
         # Verify HSN data
         hsn_item = payload['hsn']['data'][0]
