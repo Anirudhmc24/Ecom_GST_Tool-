@@ -165,7 +165,7 @@ def generate_gstr1_json(month_year, gstin, fp, ecom_gstin=None):
         "fp": fp,
         "gt": 0.0,       # Gross Turnover (annual) — update if filing annually
         "cur_gt": 0.0,   # Current period gross turnover
-        "version": "GST3.0.4",
+        "version": "GST3.2.4",
         "hash": "hash",
 
         # Always-present sections (empty list = no records for this table)
