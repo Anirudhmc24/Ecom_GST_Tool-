@@ -48,12 +48,13 @@ STATE_CODES_MAP = {
     "leh ladakh": "38"
 }
 
-def generate_gstr1_json(month_year, gstin, fp):
+def generate_gstr1_json(month_year, gstin, fp, ecom_gstin=None):
     """
     Generates the exact GSTR-1 JSON payload structure required by the GST portal.
     month_year: YYYY-MM
-    gstin: string
-    fp: Financial Period (e.g., '042026' for April 2026)
+    gstin: Supplier GSTIN
+    fp: Financial Period string (e.g., '042026' for April 2026)
+    ecom_gstin: E-Commerce Operator GSTIN (Amazon/Flipkart etc.) - required for etin field
     """
     
     # B2CS Data
@@ -77,7 +78,8 @@ def generate_gstr1_json(month_year, gstin, fp):
             rate = float(str(row['Tax Rate']).replace('%', '')) if row['Tax Rate'] else 0.0
             txval = round(float(row['Total Taxable Value']), 2)
             
-            # GSTR-1 B2CS table does not allow negative/zero values. Net negative states/rates must be handled separately.
+            # GSTR-1 B2CS table does not allow negative/zero values.
+            # Net negative states/rates must be handled separately.
             if txval > 0:
                 sply_ty = "INTRA" if pos == gstin[:2] else "INTER"
                 if sply_ty == "INTRA":
@@ -88,18 +90,24 @@ def generate_gstr1_json(month_year, gstin, fp):
                     iamt = round(txval * rate / 100.0, 2)
                     camt = 0.0
                     samt = 0.0
-                    
-                b2cs_list.append({
+
+                entry = {
                     "sply_ty": sply_ty,
                     "rt": rate,
-                    "typ": "OE",
+                    # 'E' = E-Commerce (sales through ECO like Amazon/Flipkart)
+                    # 'OE' = Other (direct B2C sales NOT through e-commerce operator)
+                    "typ": "E",
                     "pos": pos,
                     "txval": txval,
                     "iamt": iamt,
                     "camt": camt,
                     "samt": samt,
                     "csamt": 0.0
-                })
+                }
+                # etin is mandatory for typ='E' (e-commerce) entries
+                if ecom_gstin:
+                    entry["etin"] = ecom_gstin
+                b2cs_list.append(entry)
 
     # HSN Data
     hsn_df = get_final_hsn_data(month_year)
@@ -135,7 +143,7 @@ def generate_gstr1_json(month_year, gstin, fp):
                     samt = 0.0
                 
                 hsn_data_list.append({
-                    "num": len(hsn_data_list) + 1, # Dynamically generate sequence number to avoid gaps
+                    "num": len(hsn_data_list) + 1,  # Dynamically generate sequence number to avoid gaps
                     "hsn_sc": str(row['HSN']),
                     "uqc": str(row['UQC']),
                     "qty": qty,
@@ -147,13 +155,13 @@ def generate_gstr1_json(month_year, gstin, fp):
                     "csamt": 0.0
                 })
 
-    # Final Payload Structure (strictly omitting empty tables to pass validation)
+    # Final Payload Structure — matches GST portal offline tool v3.0.4 schema
     payload = {
         "gstin": gstin,
         "fp": fp,
-        "gt": 0.0,
-        "cur_gt": 0.0,
-        "version": "GST3.0.0",
+        "gt": 0.0,       # Gross Turnover (annual) — update if filing annually
+        "cur_gt": 0.0,   # Current period gross turnover
+        "version": "GST3.0.4",
         "hash": "hash"
     }
     

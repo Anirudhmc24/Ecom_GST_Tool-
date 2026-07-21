@@ -92,8 +92,17 @@ def reports_page():
         st.subheader("Generate Final GSTR-1 JSON")
         st.write("This JSON file is ready to be directly uploaded to the GST Portal Offline Utility.")
         
-        gstin = st.text_input("Your GSTIN", value=GSTIN)
-        
+        col_g1, col_g2 = st.columns(2)
+        gstin = col_g1.text_input("Your GSTIN", value=GSTIN)
+        ecom_gstin = col_g2.text_input(
+            "E-Commerce Operator GSTIN (ETIN)",
+            placeholder="e.g. 29AABCA1234A1ZK (Amazon/Flipkart)",
+            help="Mandatory for e-commerce B2CS entries. This is the GSTIN of the platform (Amazon, Flipkart etc.) through which you sold."
+        )
+
+        if not ecom_gstin:
+            st.warning("⚠️ **ETIN Required:** Enter the E-Commerce Operator GSTIN above (Amazon/Flipkart GSTIN). Without it the portal will reject the JSON.")
+
         # Check for missing HSNs
         conn = get_conn()
         missing_hsn = conn.execute(f"SELECT COUNT(*) FROM ecom_sales WHERE strftime('%Y-%m', order_date) = '{selected_month}' AND (hsn_code IS NULL OR hsn_code = 'UNKNOWN' OR hsn_code = '')").fetchone()[0]
@@ -105,9 +114,9 @@ def reports_page():
         try:
             # Calculate financial period, e.g., '042026'
             fp = selected_month.split('-')[1] + selected_month.split('-')[0]
-            json_data = generate_gstr1_json(selected_month, gstin, fp)
+            json_data = generate_gstr1_json(selected_month, gstin, fp, ecom_gstin=ecom_gstin or None)
             st.download_button(
-                label="Download GSTR-1 JSON",
+                label="⬇️ Download GSTR-1 JSON",
                 data=json_data,
                 file_name=f"GSTR1_{gstin}_{selected_month}.json",
                 mime="application/json"
