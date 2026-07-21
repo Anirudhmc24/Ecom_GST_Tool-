@@ -155,21 +155,37 @@ def generate_gstr1_json(month_year, gstin, fp, ecom_gstin=None):
                     "csamt": 0.0
                 })
 
-    # Final Payload Structure — matches GST portal offline tool v3.0.4 schema
+    # Final Payload Structure — strictly matches GST portal schema.
+    # IMPORTANT: ALL section keys must always be present even if empty.
+    # The portal does a top-level key existence check before field-level validation,
+    # so any missing section key (b2b, cdnr, nil, doc_issue, etc.) causes
+    # "File could not be uploaded!" regardless of the data inside.
     payload = {
         "gstin": gstin,
         "fp": fp,
         "gt": 0.0,       # Gross Turnover (annual) — update if filing annually
         "cur_gt": 0.0,   # Current period gross turnover
         "version": "GST3.0.4",
-        "hash": "hash"
-    }
-    
-    if b2cs_list:
-        payload["b2cs"] = b2cs_list
-    if hsn_data_list:
-        payload["hsn"] = {
+        "hash": "hash",
+
+        # Always-present sections (empty list = no records for this table)
+        "b2b":   [],   # Table 4  — B2B taxable supplies
+        "b2cl":  [],   # Table 5  — B2CL (inter-state, invoice > 2.5L)
+        "b2cs":  b2cs_list,   # Table 7  — B2CS (small/e-comm, always include)
+        "cdnr":  [],   # Table 9B — Credit/Debit notes to registered persons
+        "cdnur": [],   # Table 9B — Credit/Debit notes to unregistered persons
+        "exp":   [],   # Table 6  — Export invoices
+        "at":    [],   # Table 11A — Tax liability on advances received
+        "atadj": [],   # Table 11B — Advance amount adjusted
+        "nil": {       # Table 8  — Nil-rated / Exempted / Non-GST supplies
+            "inv": []
+        },
+        "hsn": {       # Table 12 — HSN-wise summary (mandatory even if empty)
             "data": hsn_data_list
+        },
+        "doc_issue": { # Table 13 — Document issue summary (mandatory)
+            "doc_det": []
         }
-        
+    }
+
     return json.dumps(payload, indent=2)
